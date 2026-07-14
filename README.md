@@ -74,14 +74,16 @@ INFO  Starting MOP server with transport 'stdio'
 
 ### 4. OpenCode設定
 
-`~/.config/opencode/opencode.json` または `.opencode/opencode.json`:
+`~/.config/opencode/opencode.json`:
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "mop": {
-      "command": "python",
-      "args": ["src/mcp_entry.py"]
+      "type": "local",
+      "command": ["python3", "/home/konoha/develop/rade/src/mcp_entry.py"],
+      "enabled": true
     }
   }
 }

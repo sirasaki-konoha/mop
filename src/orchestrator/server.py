@@ -63,6 +63,8 @@ mcp.tool()(_get_task_status)
 mcp.tool()(_submit_artifact)
 async def _review_code_wrapper(artifact_id: str, reviewer_agent_id: str) -> dict:
     result = await _review_tool.review_code(artifact_id, reviewer_agent_id)
+    if isinstance(result, dict):
+        return result
     if hasattr(result, "to_dict"):
         return result.to_dict()
     if dataclasses.is_dataclass(result):
@@ -72,19 +74,52 @@ async def _review_code_wrapper(artifact_id: str, reviewer_agent_id: str) -> dict
                 d[key] = value.isoformat()
             elif hasattr(value, "value"):
                 d[key] = value.value
-            elif isinstance(value, list):
-                d[key] = [
-                    {k2: (v2.isoformat() if hasattr(v2, "isoformat") else getattr(v2, "value", v2))
-                     for k2, v2 in (item.items() if isinstance(item, dict) else dataclasses.asdict(item).items())}
-                    if not isinstance(item, dict) else item
-                    for item in value
-                ]
         return d
     return {}
 
 
 mcp.tool()(_review_code_wrapper)
 mcp.tool()(_merge_tool.merge_results)
+
+
+@mcp.tool()
+async def register_agent(agent_id: str, name: str, model: str, role: str) -> dict:
+    """Register a new agent to participate in orchestration.
+    
+    Args:
+        agent_id: Unique identifier for the agent (e.g., 'D-Claude', 'E-Gemini')
+        name: Human-readable name (e.g., 'Agent D (Reviewer)')
+        model: LLM model identifier (e.g., 'claude-sonnet-4-6', 'gemini-2.0-flash')
+        role: Agent role (e.g., 'planner', 'coder', 'tester', 'reviewer', 'analyst')
+    
+    Returns:
+        The newly registered agent details.
+    """
+    agent = _orchestrator.add_agent(agent_id, name, model, role)
+    return _agent_to_dict(agent)
+
+
+@mcp.tool()
+async def list_registered_agents() -> list[dict]:
+    """List all registered agents available for task assignment.
+    
+    Returns:
+        List of all registered agents with their details.
+    """
+    agents = _orchestrator.list_agents()
+    return [_agent_to_dict(a) for a in agents]
+
+
+def _agent_to_dict(agent: object) -> dict:
+    if dataclasses.is_dataclass(agent):
+        d = dataclasses.asdict(agent)
+        for key, value in d.items():
+            if hasattr(value, "value"):
+                d[key] = value.value
+        return d
+    if hasattr(agent, "model_dump"):
+        return agent.model_dump(mode="json")
+    return {}
 
 
 def _task_to_dict(task: object) -> dict:

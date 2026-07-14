@@ -313,3 +313,31 @@ class Orchestrator:
     def list_agents(self) -> List[Agent]:
         """Return a list of all registered agents."""
         return list(self._agents.values())
+
+    def add_agent(self, agent_id: str, name: str, model: str, role: str) -> Agent:
+        """Register a new agent.
+        
+        Args:
+            agent_id: Unique identifier for the agent.
+            name: Human-readable name.
+            model: LLM model identifier.
+            role: Agent role (e.g., 'planner', 'coder', 'tester', 'reviewer').
+            
+        Returns:
+            The newly created agent.
+            
+        Raises:
+            ValueError: If an agent with the same ID already exists.
+        """
+        if agent_id in self._agents:
+            raise ValueError(f"Agent already exists: {agent_id}")
+        
+        agent = Agent(
+            id=agent_id,
+            name=name,
+            model=model,
+            role=role,
+        )
+        self._agents[agent_id] = agent
+        logger.info("Registered new agent: %s (%s)", agent_id, name)
+        return agent
