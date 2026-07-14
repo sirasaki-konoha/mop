@@ -26,20 +26,17 @@ User Request
 │    agent://{agent_id}/inbox          │
 │    artifact://{artifact_id}          │
 └─────────────────────────────────────┘
-    │           │           │
-    ▼           ▼           ▼
- Agent A    Agent B    Agent C
- (Planner)  (Coder)    (Tester)
- Kimi K2.7  Qwen3.7    Mimo v2.5
+    │
+    ▼
+ Clients register themselves with register_agent
 ```
 
 ## エージェント構成
 
-| エージェント | モデル | 役割 |
-|---|---|---|
-| Agent A (Planner) | Kimi K2.7 Code | 全体設計、アーキテクチャ決定、実装指示の管理 |
-| Agent B (Coder) | Qwen3.7 Plus | MCPサーバー本体の実装（Python/TypeScript） |
-| Agent C (Tester) | Mimo v2.5 Pro | テスト、コードレビュー、検証スクリプト |
+MOP は起動時にエージェントを登録しません。`list_registered_agents` は、まだ
+`register_agent` を呼んだクライアントがなければ空の配列を返します。各クライアントは
+共有 HTTP endpoint へ接続した後、安定した ID で自身を登録してください。再接続時の
+同じ ID による登録は、モデル・名前・役割を最新の値へ更新します。
 
 ## セットアップ
 
@@ -90,7 +87,23 @@ tool_timeout_sec = 60
 default_tools_approval_mode = "auto"
 ```
 
-### 5. Kimiなど他クライアントの設定
+### 5. OpenCode 設定
+
+`~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "mop": {
+      "type": "remote",
+      "url": "http://127.0.0.1:8765/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+### 6. 他クライアントの設定
 
 クライアントのMCP設定で、トランスポートに `Streamable HTTP`、URLに次を指定します。
 

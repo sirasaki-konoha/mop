@@ -53,7 +53,6 @@ class Orchestrator:
         self.agent_store = agent_store or self
         self.artifact_store = artifact_store
         self._agents: Dict[str, Agent] = {}
-        self._init_default_agents()
 
         # Tool instances used by facade methods.
         from .tools import DecomposeTool, AssignTool, MergeTool
@@ -63,32 +62,6 @@ class Orchestrator:
         self._merge_tool: Optional[MergeTool] = None
         if self.artifact_store is not None:
             self._merge_tool = MergeTool(self.task_store, self.artifact_store)
-
-    def _init_default_agents(self) -> None:
-        """Register the three default agents defined by the project plan."""
-        defaults = [
-            Agent(
-                id="A-Kimi",
-                name="Agent A (Planner)",
-                model="kimi-k2.7-code",
-                role="planner",
-            ),
-            Agent(
-                id="B-Qwen",
-                name="Agent B (Coder)",
-                model="qwen3.7-plus",
-                role="coder",
-            ),
-            Agent(
-                id="C-Mimo",
-                name="Agent C (Tester)",
-                model="mimo-v2.5-pro",
-                role="tester",
-            ),
-        ]
-        for agent in defaults:
-            self._agents[agent.id] = agent
-        logger.info("Initialized %d default agents", len(defaults))
 
     # ------------------------------------------------------------------
     # Task management
@@ -315,7 +288,7 @@ class Orchestrator:
         return list(self._agents.values())
 
     def add_agent(self, agent_id: str, name: str, model: str, role: str) -> Agent:
-        """Register a new agent.
+        """Register an agent, refreshing an existing agent's metadata.
         
         Args:
             agent_id: Unique identifier for the agent.
@@ -326,11 +299,17 @@ class Orchestrator:
         Returns:
             The newly created agent.
             
-        Raises:
-            ValueError: If an agent with the same ID already exists.
+        Re-registering a stable client ID is expected after a client reconnects.
+        In that case its name, model, and role are refreshed while its status
+        and inbox are retained.
         """
-        if agent_id in self._agents:
-            raise ValueError(f"Agent already exists: {agent_id}")
+        existing = self._agents.get(agent_id)
+        if existing is not None:
+            existing.name = name
+            existing.model = model
+            existing.role = role
+            logger.info("Refreshed registered agent: %s (%s)", agent_id, name)
+            return existing
         
         agent = Agent(
             id=agent_id,

@@ -2,7 +2,15 @@ from __future__ import annotations
 
 import asyncio
 
-from orchestrator.server import configure_server_transport, get_server_info
+from orchestrator.server import (
+    configure_server_transport,
+    get_server_info,
+    list_registered_agents,
+)
+
+
+def test_list_registered_agents_is_empty_before_any_client_registers():
+    assert asyncio.run(list_registered_agents()) == []
 
 
 def test_get_server_info_reports_identity_and_registered_tools():

@@ -182,6 +182,8 @@ async def test_agent_communication_workflow(orchestrator, mock_task_store):
         created_at=datetime.now(),
         updated_at=datetime.now()
     )
+    orchestrator.add_agent("A-Kimi", "Planner", "kimi-k2.7-code", "planner")
+    orchestrator.add_agent("B-Qwen", "Coder", "qwen3.7-plus", "coder")
     
     # Act
     # Agent B asks question
@@ -207,6 +209,23 @@ async def test_agent_communication_workflow(orchestrator, mock_task_store):
     assert response is not None
     assert message.from_agent == "B-Qwen"
     assert response.from_agent == "A-Kimi"
+
+
+def test_registering_an_existing_agent_refreshes_its_metadata(orchestrator):
+    original = orchestrator.add_agent(
+        "codex", "Codex", "gpt-5", "collaborator"
+    )
+    original.status = "working"
+
+    refreshed = orchestrator.add_agent(
+        "codex", "Codex Support", "gpt-5.6-sol", "support"
+    )
+
+    assert refreshed is original
+    assert refreshed.name == "Codex Support"
+    assert refreshed.model == "gpt-5.6-sol"
+    assert refreshed.role == "support"
+    assert refreshed.status == "working"
 
 
 @pytest.mark.asyncio
@@ -284,6 +303,7 @@ async def test_task_status_updates(orchestrator, mock_task_store):
         return updated_task
     
     mock_task_store.update_task.side_effect = mock_update_task
+    fresh_orchestrator.add_agent("B-Qwen", "Coder", "qwen3.7-plus", "coder")
     
     # Act
     # Get initial status
@@ -313,23 +333,20 @@ async def test_error_handling_in_workflow(orchestrator, mock_task_store):
 
 
 @pytest.mark.asyncio
-async def test_agent_initialization(orchestrator):
-    """Test that default agents are initialized correctly."""
+async def test_agent_initialization_is_empty(orchestrator):
+    """A new orchestrator has no agents until clients register themselves."""
     # Act
     agents = orchestrator.list_agents()
     
     # Assert
-    assert len(agents) == 3
-    agent_ids = [agent.id for agent in agents]
-    assert "A-Kimi" in agent_ids
-    assert "B-Qwen" in agent_ids
-    assert "C-Mimo" in agent_ids
+    assert agents == []
 
 
 @pytest.mark.asyncio
-async def test_get_agent(orchestrator):
-    """Test getting a specific agent."""
+async def test_get_registered_agent(orchestrator):
+    """Test getting an explicitly registered agent."""
     # Act
+    orchestrator.add_agent("A-Kimi", "Agent A (Planner)", "kimi-k2.7-code", "planner")
     agent = orchestrator.get_agent("A-Kimi")
     
     # Assert
