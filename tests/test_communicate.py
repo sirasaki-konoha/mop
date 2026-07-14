@@ -4,11 +4,19 @@ Tests for agent_communicate tool.
 This module contains tests for the agent_communicate tool implementation.
 """
 
+import asyncio
+
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.orchestrator.tools.communicate import agent_communicate, Message, MessageStore
+from src.orchestrator.tools.communicate import (
+    Message,
+    MessageStore,
+    agent_communicate,
+    get_agent_inbox,
+    wait_for_agent_message,
+)
 
 
 @pytest.fixture
@@ -30,17 +38,20 @@ async def test_send_message_success(mock_message_store):
     message_type = "request"
     content = "Need clarification on API spec"
     task_id = "task-1"
-    
-    with patch('src.orchestrator.tools.communicate.get_message_store', return_value=mock_message_store):
+
+    with patch(
+        "src.orchestrator.tools.communicate.get_message_store",
+        return_value=mock_message_store,
+    ):
         # Act
         result = await agent_communicate(
             from_agent=from_agent,
             to_agent=to_agent,
             message_type=message_type,
             content=content,
-            task_id=task_id
+            task_id=task_id,
         )
-    
+
     # Assert
     assert result is not None
     assert result["from_agent"] == from_agent
@@ -59,17 +70,20 @@ async def test_send_message_without_task_id(mock_message_store):
     to_agent = "agent-b"
     message_type = "question"
     content = "General question about architecture"
-    
-    with patch('src.orchestrator.tools.communicate.get_message_store', return_value=mock_message_store):
+
+    with patch(
+        "src.orchestrator.tools.communicate.get_message_store",
+        return_value=mock_message_store,
+    ):
         # Act
         result = await agent_communicate(
             from_agent=from_agent,
             to_agent=to_agent,
             message_type=message_type,
             content=content,
-            task_id=None
+            task_id=None,
         )
-    
+
     # Assert
     assert result is not None
     assert result["task_id"] is None
@@ -83,7 +97,7 @@ async def test_send_message_invalid_type():
     to_agent = "agent-b"
     message_type = "invalid_type"
     content = "Test message"
-    
+
     # Act & Assert
     with pytest.raises(ValueError, match="Invalid message_type"):
         await agent_communicate(
@@ -91,7 +105,7 @@ async def test_send_message_invalid_type():
             to_agent=to_agent,
             message_type=message_type,
             content=content,
-            task_id=None
+            task_id=None,
         )
 
 
@@ -103,7 +117,7 @@ async def test_send_message_empty_from_agent():
     to_agent = "agent-b"
     message_type = "request"
     content = "Test message"
-    
+
     # Act & Assert
     with pytest.raises(ValueError, match="from_agent must not be empty"):
         await agent_communicate(
@@ -111,7 +125,7 @@ async def test_send_message_empty_from_agent():
             to_agent=to_agent,
             message_type=message_type,
             content=content,
-            task_id=None
+            task_id=None,
         )
 
 
@@ -123,7 +137,7 @@ async def test_send_message_empty_to_agent():
     to_agent = ""
     message_type = "request"
     content = "Test message"
-    
+
     # Act & Assert
     with pytest.raises(ValueError, match="to_agent must not be empty"):
         await agent_communicate(
@@ -131,7 +145,7 @@ async def test_send_message_empty_to_agent():
             to_agent=to_agent,
             message_type=message_type,
             content=content,
-            task_id=None
+            task_id=None,
         )
 
 
@@ -143,7 +157,7 @@ async def test_send_message_empty_content():
     to_agent = "agent-b"
     message_type = "request"
     content = ""
-    
+
     # Act & Assert
     with pytest.raises(ValueError, match="content must not be empty"):
         await agent_communicate(
@@ -151,7 +165,7 @@ async def test_send_message_empty_content():
             to_agent=to_agent,
             message_type=message_type,
             content=content,
-            task_id=None
+            task_id=None,
         )
 
 
@@ -163,17 +177,20 @@ async def test_send_message_stores_message(mock_message_store):
     to_agent = "agent-b"
     message_type = "request"
     content = "Test message"
-    
-    with patch('src.orchestrator.tools.communicate.get_message_store', return_value=mock_message_store):
+
+    with patch(
+        "src.orchestrator.tools.communicate.get_message_store",
+        return_value=mock_message_store,
+    ):
         # Act
         await agent_communicate(
             from_agent=from_agent,
             to_agent=to_agent,
             message_type=message_type,
             content=content,
-            task_id=None
+            task_id=None,
         )
-    
+
     # Assert
     mock_message_store.add.assert_called_once()
     call_args = mock_message_store.add.call_args[0][0]
@@ -195,7 +212,7 @@ async def test_message_store_get_inbox(mock_message_store):
             to_agent=agent_id,
             message_type="request",
             content="Message 1",
-            task_id="task-1"
+            task_id="task-1",
         ),
         Message(
             id="msg-2",
@@ -203,14 +220,14 @@ async def test_message_store_get_inbox(mock_message_store):
             to_agent=agent_id,
             message_type="review",
             content="Message 2",
-            task_id="task-2"
-        )
+            task_id="task-2",
+        ),
     ]
     mock_message_store.get_inbox.return_value = expected_messages
-    
+
     # Act
     result = mock_message_store.get_inbox(agent_id)
-    
+
     # Assert
     assert len(result) == 2
     assert all(msg.to_agent == agent_id for msg in result)
@@ -229,15 +246,81 @@ async def test_message_store_get_sent(mock_message_store):
             to_agent="agent-b",
             message_type="request",
             content="Message 1",
-            task_id="task-1"
+            task_id="task-1",
         )
     ]
     mock_message_store.get_sent.return_value = expected_messages
-    
+
     # Act
     result = mock_message_store.get_sent(agent_id)
-    
+
     # Assert
     assert len(result) == 1
     assert all(msg.from_agent == agent_id for msg in result)
     mock_message_store.get_sent.assert_called_once_with(agent_id)
+
+
+def test_get_agent_inbox_supports_message_cursor():
+    async def scenario():
+        store = MessageStore()
+        with patch(
+            "src.orchestrator.tools.communicate.get_message_store",
+            return_value=store,
+        ):
+            first = await agent_communicate(
+                "agent-a", "agent-b", "request", "First message"
+            )
+            second = await agent_communicate(
+                "agent-a", "agent-b", "response", "Second message"
+            )
+            inbox = await get_agent_inbox("agent-b", after_message_id=first["id"])
+        return second, inbox
+
+    second, inbox = asyncio.run(scenario())
+
+    assert inbox["count"] == 1
+    assert inbox["messages"][0]["id"] == second["id"]
+    assert inbox["latest_message_id"] == second["id"]
+    assert inbox["has_more"] is False
+
+
+def test_wait_for_agent_message_wakes_when_message_arrives():
+    async def scenario():
+        store = MessageStore()
+        with patch(
+            "src.orchestrator.tools.communicate.get_message_store",
+            return_value=store,
+        ):
+            waiter = asyncio.create_task(
+                wait_for_agent_message("agent-b", timeout_seconds=1)
+            )
+            await asyncio.sleep(0)
+            sent = await agent_communicate(
+                "agent-a", "agent-b", "request", "Live message"
+            )
+            received = await waiter
+        return sent, received
+
+    sent, received = asyncio.run(scenario())
+
+    assert received["timed_out"] is False
+    assert received["message"]["id"] == sent["id"]
+    assert received["message"]["content"] == "Live message"
+
+
+def test_wait_for_agent_message_reports_timeout():
+    async def scenario():
+        store = MessageStore()
+        with patch(
+            "src.orchestrator.tools.communicate.get_message_store",
+            return_value=store,
+        ):
+            return await wait_for_agent_message("agent-b", timeout_seconds=0)
+
+    result = asyncio.run(scenario())
+
+    assert result == {
+        "agent_id": "agent-b",
+        "message": None,
+        "timed_out": True,
+    }

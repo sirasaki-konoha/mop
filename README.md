@@ -46,8 +46,8 @@ User Request
 ### 1. 仮想環境の作成
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
 ### 2. 依存関係インストール
@@ -56,52 +56,54 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. MCPサーバー起動
+### 3. 共有HTTP MCPサーバー起動
+
+```bash
+python src/http_entry.py
+```
+
+`http://127.0.0.1:8765/mcp` でStreamable HTTP MCPサーバーが待機します。
+Codex、Kimiなど、通信させたい全クライアントをこの同じURLへ接続してください。
+タスク、成果物、メッセージはこの単一プロセス内で共有されます。
+
+```
+INFO Starting shared MOP server at http://127.0.0.1:8765/mcp
+INFO Starting MCP server 'mop' with transport 'streamable-http'
+```
+
+ホスト、ポート、パスはオプションまたは環境変数で変更できます。
+
+```bash
+python src/http_entry.py --host 127.0.0.1 --port 9000 --path /mcp
+MOP_PORT=9000 python src/http_entry.py
+```
+
+### 4. Codex設定
+
+プロジェクトの `.codex/config.toml`:
+
+```toml
+[mcp_servers.mop]
+url = "http://127.0.0.1:8765/mcp"
+enabled = true
+tool_timeout_sec = 60
+default_tools_approval_mode = "auto"
+```
+
+### 5. Kimiなど他クライアントの設定
+
+クライアントのMCP設定で、トランスポートに `Streamable HTTP`、URLに次を指定します。
+
+```text
+http://127.0.0.1:8765/mcp
+```
+
+クライアントごとに `src/mcp_entry.py` を起動すると、stdioプロセスごとに状態が分離し、
+エージェント間のメッセージは共有されません。stdio互換モードは単独利用の場合に限り、
+次のコマンドで起動できます。
 
 ```bash
 python src/mcp_entry.py
-```
-
-起動すると、stdio経由でMCPサーバーが待機します。
-
-```
-╭──────────────────────────────────────────────╮
-│              FastMCP 3.4.4                    │
-│  🖥  Server: mop                              │
-╰──────────────────────────────────────────────╯
-INFO  Starting MOP server with transport 'stdio'
-```
-
-### 4. OpenCode設定
-
-`~/.config/opencode/opencode.json`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "mop": {
-      "type": "local",
-      "command": ["python3", "/home/konoha/develop/rade/src/mcp_entry.py"],
-      "enabled": true
-    }
-  }
-}
-```
-
-### 5. Codex設定
-
-`codex.json`:
-
-```json
-{
-  "mcpServers": {
-    "mop": {
-      "command": "python",
-      "args": ["src/mcp_entry.py"]
-    }
-  }
-}
 ```
 
 ## プロジェクト構成
@@ -133,7 +135,8 @@ rade/
 │   │   │   ├── task_store.py   # タスクストア実装
 │   │   │   └── artifact_store.py # アーティファクトストア実装
 │   │   └── orchestrator.py     # コアロジック
-│   └── mcp_entry.py            # MCPサーバー起動用エントリ
+│   ├── http_entry.py           # 共有Streamable HTTPサーバー
+│   └── mcp_entry.py            # 単独利用向けstdioサーバー
 ├── tests/
 │   ├── test_decompose.py
 │   ├── test_assign.py
@@ -304,10 +307,24 @@ asyncio.run(full_workflow())
 | `decompose_task` | リクエストをサブタスクに分解 | Agent A |
 | `assign_agent` | タスクをエージェントに割り当て | Agent A |
 | `agent_communicate` | エージェント間メッセージ送受信 | Agent B |
+| `get_agent_inbox` | 受信箱をカーソル付きで取得 | Agent B |
+| `wait_for_agent_message` | 新着メッセージを待機 | Agent B |
 | `get_task_status` | タスクステータス取得 | Agent B |
 | `submit_artifact` | 成果物提出 | Agent B |
 | `review_code` | コードレビュー実施 | Agent C |
 | `merge_results` | 成果物統合 | Agent A |
+| `get_server_info` | サーバーと登録ツールの診断情報 | Codex |
+
+### ライブ通信
+
+受信側はまず `get_agent_inbox` を呼び、返された `latest_message_id` を保持します。
+続けて `wait_for_agent_message` の `after_message_id` にそのIDを指定すると、
+新着メッセージが届くまで待機できます。送信側は従来どおり
+`agent_communicate` を呼びます。
+
+この待機はメッセージ配送をリアルタイム化しますが、停止中のLLMを自動起動するものでは
+ありません。受信クライアントが待機ツールを実行中である必要があります。また、現在の
+状態はHTTPサーバープロセス内に保持され、サーバー再起動時に失われます。
 
 ### MCPリソース
 

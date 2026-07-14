@@ -37,10 +37,26 @@ _tools_pkg.assign_agent = _assign_mod.assign_agent
 from fastmcp import FastMCP
 
 from orchestrator.tools.artifact import create_submit_artifact
-from orchestrator.tools.communicate import agent_communicate, get_message_store
+from orchestrator.tools.communicate import (
+    agent_communicate,
+    get_agent_inbox,
+    get_message_store,
+    wait_for_agent_message,
+)
 from orchestrator.tools.status import create_get_task_status
 
 logger = logging.getLogger(__name__)
+
+SERVER_NAME = "mop"
+SERVER_VERSION = "0.1.0"
+SERVER_TRANSPORT = "stdio"
+MCP_INSTRUCTIONS = (
+    "MOP coordinates agents through one shared server process. For live "
+    "cross-client messaging, every client must connect to the same Streamable "
+    "HTTP endpoint. Send with agent_communicate; receive with get_agent_inbox "
+    "or wait_for_agent_message. Assigning a task records ownership but does "
+    "not start an agent. State is retained for the lifetime of the server."
+)
 
 _task_store = get_task_store()
 _artifact_store = get_artifact_store()
@@ -54,13 +70,21 @@ _assign_tool = _assign_mod.AssignTool(_task_store, _orchestrator)
 _merge_tool = _merge_mod.MergeTool(_task_store, _artifact_store)
 _review_tool = _review_mod.ReviewTool(_artifact_store)
 
-mcp = FastMCP("mop")
+mcp = FastMCP(
+    SERVER_NAME,
+    version=SERVER_VERSION,
+    instructions=MCP_INSTRUCTIONS,
+)
 
 mcp.tool()(_decompose_tool.decompose_task)
 mcp.tool()(_assign_tool.assign_agent)
 mcp.tool()(agent_communicate)
+mcp.tool()(get_agent_inbox)
+mcp.tool()(wait_for_agent_message)
 mcp.tool()(_get_task_status)
 mcp.tool()(_submit_artifact)
+
+
 async def _review_code_wrapper(artifact_id: str, reviewer_agent_id: str) -> dict:
     result = await _review_tool.review_code(artifact_id, reviewer_agent_id)
     if isinstance(result, dict):
@@ -83,15 +107,45 @@ mcp.tool()(_merge_tool.merge_results)
 
 
 @mcp.tool()
+async def get_server_info() -> dict[str, object]:
+    """Return the MOP server identity and currently registered tools."""
+    try:
+        registered_tools = await mcp.list_tools()
+    except Exception:
+        logger.exception("Unable to list registered MCP tools")
+        raise
+
+    tool_names = sorted(tool.name for tool in registered_tools)
+    return {
+        "name": SERVER_NAME,
+        "version": SERVER_VERSION,
+        "transport": SERVER_TRANSPORT,
+        "live_messaging": SERVER_TRANSPORT == "streamable-http",
+        "state_scope": "server_process",
+        "tool_count": len(tool_names),
+        "tools": tool_names,
+    }
+
+
+def configure_server_transport(transport: str) -> None:
+    """Record the active transport reported by ``get_server_info``."""
+    if transport not in {"stdio", "streamable-http"}:
+        raise ValueError(f"Unsupported server transport: {transport}")
+
+    global SERVER_TRANSPORT
+    SERVER_TRANSPORT = transport
+
+
+@mcp.tool()
 async def register_agent(agent_id: str, name: str, model: str, role: str) -> dict:
     """Register a new agent to participate in orchestration.
-    
+
     Args:
         agent_id: Unique identifier for the agent (e.g., 'D-Claude', 'E-Gemini')
         name: Human-readable name (e.g., 'Agent D (Reviewer)')
         model: LLM model identifier (e.g., 'claude-sonnet-4-6', 'gemini-2.0-flash')
         role: Agent role (e.g., 'planner', 'coder', 'tester', 'reviewer', 'analyst')
-    
+
     Returns:
         The newly registered agent details.
     """
@@ -102,7 +156,7 @@ async def register_agent(agent_id: str, name: str, model: str, role: str) -> dic
 @mcp.tool()
 async def list_registered_agents() -> list[dict]:
     """List all registered agents available for task assignment.
-    
+
     Returns:
         List of all registered agents with their details.
     """
@@ -170,7 +224,9 @@ async def artifact_resource(artifact_id: str) -> str:
     if artifact is None:
         raise ValueError(f"Artifact not found: {artifact_id}")
     return json.dumps(
-        artifact.model_dump(mode="json"), ensure_ascii=False, default=str,
+        artifact.model_dump(mode="json"),
+        ensure_ascii=False,
+        default=str,
     )
 
 

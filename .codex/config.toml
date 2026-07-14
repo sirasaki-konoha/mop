@@ -1,0 +1,23 @@
+# Project-scoped shared MOP server. Start it with:
+# .venv/bin/python src/http_entry.py
+[mcp_servers.mop]
+url = "http://127.0.0.1:8765/mcp"
+enabled = true
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+default_tools_approval_mode = "auto"
+
+[mcp_servers.mop.tools._review_code_wrapper]
+approval_mode = "approve"
+
+[mcp_servers.mop.tools.list_registered_agents]
+approval_mode = "approve"
+
+[mcp_servers.mop.tools.get_agent_inbox]
+approval_mode = "approve"
+
+[mcp_servers.mop.tools.register_agent]
+approval_mode = "approve"
+
+[mcp_servers.mop.tools.wait_for_agent_message]
+approval_mode = "approve"
