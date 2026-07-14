@@ -12,7 +12,7 @@ from orchestrator.server import mcp
 
 def main() -> None:
     logger = logging.getLogger(__name__)
-    logger.info("Starting Multi-Agent MCP Orchestrator server")
+    logger.info("Starting MOP server")
     mcp.run()
 
 

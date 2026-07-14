@@ -54,7 +54,7 @@ _assign_tool = _assign_mod.AssignTool(_task_store, _orchestrator)
 _merge_tool = _merge_mod.MergeTool(_task_store, _artifact_store)
 _review_tool = _review_mod.ReviewTool(_artifact_store)
 
-mcp = FastMCP("multi-agent-orchestrator")
+mcp = FastMCP("mop")
 
 mcp.tool()(_decompose_tool.decompose_task)
 mcp.tool()(_assign_tool.assign_agent)

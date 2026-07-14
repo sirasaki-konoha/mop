@@ -1,6 +1,6 @@
-# Multi-Agent MCP Orchestrator
+# MOP - Multi-Agent Orchestrator Platform
 
-Multi-Agent MCP Orchestratorは、複数のAIエージェント（LLM）が協調してタスクを遂行するためのMCPサーバーです。OpenCodeとCodexの両方で利用可能な汎用MCPサーバーとして設計し、エージェント間の役割分担・通信・成果物の統合を自動化します。
+MOPは、複数のAIエージェント（LLM）が協調してタスクを遂行するためのMCPサーバーです。OpenCodeとCodexの両方で利用可能な汎用MCPサーバーとして設計し、エージェント間の役割分担・通信・成果物の統合を自動化します。
 
 ## アーキテクチャ
 
@@ -67,9 +67,9 @@ python src/mcp_entry.py
 ```
 ╭──────────────────────────────────────────────╮
 │              FastMCP 3.4.4                    │
-│  🖥  Server: multi-agent-orchestrator         │
+│  🖥  Server: mop                              │
 ╰──────────────────────────────────────────────╯
-INFO  Starting MCP server 'multi-agent-orchestrator' with transport 'stdio'
+INFO  Starting MOP server with transport 'stdio'
 ```
 
 ### 4. OpenCode設定
@@ -79,7 +79,7 @@ INFO  Starting MCP server 'multi-agent-orchestrator' with transport 'stdio'
 ```json
 {
   "mcpServers": {
-    "multi-agent-orchestrator": {
+    "mop": {
       "command": "python",
       "args": ["src/mcp_entry.py"]
     }
@@ -94,7 +94,7 @@ INFO  Starting MCP server 'multi-agent-orchestrator' with transport 'stdio'
 ```json
 {
   "mcpServers": {
-    "multi-agent-orchestrator": {
+    "mop": {
       "command": "python",
       "args": ["src/mcp_entry.py"]
     }
