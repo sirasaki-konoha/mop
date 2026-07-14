@@ -61,7 +61,29 @@ mcp.tool()(_assign_tool.assign_agent)
 mcp.tool()(agent_communicate)
 mcp.tool()(_get_task_status)
 mcp.tool()(_submit_artifact)
-mcp.tool()(_review_tool.review_code)
+async def _review_code_wrapper(artifact_id: str, reviewer_agent_id: str) -> dict:
+    result = await _review_tool.review_code(artifact_id, reviewer_agent_id)
+    if hasattr(result, "to_dict"):
+        return result.to_dict()
+    if dataclasses.is_dataclass(result):
+        d = dataclasses.asdict(result)
+        for key, value in d.items():
+            if hasattr(value, "isoformat"):
+                d[key] = value.isoformat()
+            elif hasattr(value, "value"):
+                d[key] = value.value
+            elif isinstance(value, list):
+                d[key] = [
+                    {k2: (v2.isoformat() if hasattr(v2, "isoformat") else getattr(v2, "value", v2))
+                     for k2, v2 in (item.items() if isinstance(item, dict) else dataclasses.asdict(item).items())}
+                    if not isinstance(item, dict) else item
+                    for item in value
+                ]
+        return d
+    return {}
+
+
+mcp.tool()(_review_code_wrapper)
 mcp.tool()(_merge_tool.merge_results)
 
 
@@ -79,6 +101,20 @@ def _task_to_dict(task: object) -> dict:
     return {}
 
 
+def _message_to_json_dict(message: object) -> dict:
+    if hasattr(message, "model_dump"):
+        return message.model_dump(mode="json")
+    if dataclasses.is_dataclass(message):
+        d = dataclasses.asdict(message)
+        for key, value in d.items():
+            if hasattr(value, "isoformat"):
+                d[key] = value.isoformat()
+            elif hasattr(value, "value"):
+                d[key] = value.value
+        return d
+    return {"raw": str(message)}
+
+
 @mcp.resource("task://{task_id}/status")
 async def task_status_resource(task_id: str) -> str:
     result = await _get_task_status(task_id)
@@ -89,7 +125,8 @@ async def task_status_resource(task_id: str) -> str:
 async def agent_inbox_resource(agent_id: str) -> str:
     store = get_message_store()
     messages = store.get_inbox(agent_id)
-    return json.dumps(messages, ensure_ascii=False, default=str)
+    data = [_message_to_json_dict(m) for m in messages]
+    return json.dumps(data, ensure_ascii=False, default=str)
 
 
 @mcp.resource("artifact://{artifact_id}")

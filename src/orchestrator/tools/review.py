@@ -6,7 +6,7 @@ to review artifacts submitted by other agents.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 
@@ -104,15 +104,16 @@ class ReviewTool:
         else:
             review_result = await self._review_generic_artifact(artifact)
         
-        # Create and return the review
-        return Review(
+        # Create and return the review as dict for MCP serialization
+        review = Review(
             artifact_id=artifact_id,
             reviewer_agent_id=reviewer_agent_id,
             status=review_result["status"],
             comments=review_result["comments"],
             suggestions=review_result["suggestions"],
-            timestamp=datetime.now()
+            timestamp=datetime.now(timezone.utc)
         )
+        return review.to_dict()
     
     async def _review_code_artifact(self, artifact: Artifact) -> dict:
         """

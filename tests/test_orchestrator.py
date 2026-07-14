@@ -233,10 +233,9 @@ async def test_review_workflow(orchestrator, mock_artifact_store):
     
     # Assert
     assert review is not None
-    assert review.artifact_id == "artifact-1"
-    assert review.reviewer_agent_id == "C-Mimo"
-    status_val = review.status.value if hasattr(review.status, 'value') else review.status
-    assert status_val in ["approved", "changes_requested", "rejected"]
+    assert review["artifact_id"] == "artifact-1"
+    assert review["reviewer_agent_id"] == "C-Mimo"
+    assert review["status"] in ["approved", "changes_requested", "rejected"]
 
 
 @pytest.mark.asyncio
